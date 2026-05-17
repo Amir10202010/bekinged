@@ -11,14 +11,27 @@ import {
   getRoomByUserId,
 } from './rooms'
 
-const ALLOWED_ORIGINS = [
+// Allow configuration of allowed origins via env var `ALLOWED_ORIGINS` (comma separated)
+// Example: ALLOWED_ORIGINS="https://app.example.com,https://staging.example.com"
+const envList = (process.env.ALLOWED_ORIGINS || process.env.CLIENT_URL || '')
+  .split(',')
+  .map(s => s.trim())
+  .filter(Boolean)
+
+const ALLOWED_ORIGINS = Array.from(new Set([
   'http://localhost:3000',
-  process.env.CLIENT_URL ?? '',
-].filter(Boolean).map(o => o.replace(/\/$/, ''))
+  ...envList,
+])).map(o => o.replace(/\/$/, ''))
 
 function isAllowed(origin: string | undefined): boolean {
+  // If no origin (e.g., same-origin request from server), allow
   if (!origin) return true
-  return ALLOWED_ORIGINS.some(o => origin.replace(/\/$/, '') === o)
+  // Allow all when explicitly set (temporary/development)
+  if (process.env.ALLOW_ALL_ORIGINS === 'true') return true
+  const cleaned = origin.replace(/\/$/, '')
+  const ok = ALLOWED_ORIGINS.includes(cleaned)
+  if (!ok) console.warn('CORS blocked origin:', origin, 'allowed:', ALLOWED_ORIGINS)
+  return ok
 }
 
 const app = express()
