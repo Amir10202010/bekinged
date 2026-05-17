@@ -1,5 +1,5 @@
 import { Server, Socket } from 'socket.io'
-import { createRoom } from './rooms'
+import { createRoom, startTurnTimerByRoomId } from './rooms'
 
 interface QueuePlayer {
   socketId: string
@@ -22,6 +22,8 @@ export function handleMatchmaking(io: Server, socket: Socket, data: QueuePlayer)
     const roomId = `room_${Date.now()}`
 
     createRoom(roomId, p1, p2)
+    // Start server-side turn timer for initial player
+    startTurnTimerByRoomId(io, roomId)
 
     const s1 = io.sockets.sockets.get(p1.socketId)
     const s2 = io.sockets.sockets.get(p2.socketId)

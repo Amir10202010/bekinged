@@ -27,6 +27,7 @@
 ├── server
 │   ├── index.ts
 │   ├── matchmaking.ts
+│   ├── package.json
 │   ├── rooms.ts
 │   └── tsconfig.json
 ├── src
@@ -99,4 +100,4 @@
 ├── tsconfig.json
 └── tsconfig.tsbuildinfo
 
-37 directories, 63 files
+37 directories, 64 files

@@ -11,64 +11,143 @@ export default function Page() {
   const { state, validMoves, selectPiece, tryMoveTo, applyMove, makeAIMove, init } = useGame()
   const { user } = useAuth()
 
+  // multiplayer state
   const [gameMode, setGameMode] = useState<'ai' | 'multiplayer'>('ai')
-  const [matchState, setMatchState] = useState<'idle' | 'searching' | 'found' | 'playing'>('idle')
+  const [matchState, setMatchState] = useState<'idle' | 'searching' | 'found' | 'playing' | 'ended'>('idle')
+  const [myColor, setMyColor] = useState<'red' | 'black'>('red')
   const [roomId, setRoomId] = useState<string | null>(null)
-  const [opponentInfo, setOpponentInfo] = useState<{ id?: string; username: string; elo: number } | null>(null)
+  const [opponentInfo, setOpponentInfo] = useState<{ id: string; username: string; elo: number } | null>(null)
+  const [showMatchFound, setShowMatchFound] = useState(false)
+  const [matchCountdown, setMatchCountdown] = useState(3)
+  const [turnTimeLeft, setTurnTimeLeft] = useState<number>(60)
+  const [opponentDisconnected, setOpponentDisconnected] = useState(false)
+  const [disconnectCountdown, setDisconnectCountdown] = useState<number | null>(null)
   const startTimeRef = useRef<number | null>(null)
+  const gameSaved = useRef(false)
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const disconnectTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {
     const s = getSocket()
-    const onMatchFound = (payload: Record<string, unknown>) => {
-      const room = (payload['roomId'] as string) ?? null
-      setRoomId(room)
-      const opp = payload['opponent'] as Record<string, unknown> | undefined
-      setOpponentInfo(
-        opp
-          ? {
-              id: (opp['id'] as string) ?? undefined,
-              username: (opp['username'] as string) ?? 'Opponent',
-              elo: (opp['elo'] as number) ?? 1000,
-            }
-          : null
-      )
-      setMatchState('playing')
-      init()
-      startTimeRef.current = Date.now()
+
+    // if user had an active session, ask server to reconnect them
+    if (user) {
+      s.connect()
+      s.emit('player:reconnect', { userId: user.id })
     }
 
-    const onGameMove = (payload: Record<string, unknown>) => {
+    const onMatchFound = (payload: { roomId: string; color: 'red' | 'black'; opponent: { id: string; username: string; elo: number } }) => {
+      setRoomId(payload.roomId)
+      setMyColor(payload.color)
+      setOpponentInfo(payload.opponent)
+      setShowMatchFound(true)
+      setMatchState('found')
+      init()
+      setMatchCountdown(3)
+      // countdown for the modal
+      const cd = setInterval(() => {
+        setMatchCountdown(prev => {
+          if (prev <= 1) {
+            clearInterval(cd)
+            setShowMatchFound(false)
+            setMatchState('playing')
+            startTimeRef.current = Date.now()
+            return 0
+          }
+          return prev - 1
+        })
+      }, 1000)
+      // auto-clear after 3s as a safety
+      setTimeout(() => {
+        setShowMatchFound(false)
+        setMatchState('playing')
+      }, 3000)
+    }
+
+    const onGameMove = (payload: { move: unknown; gameState: unknown; currentTurn?: 'red' | 'black' }) => {
       try {
-        const move = payload['move'] as unknown as Move
-        if (move) applyMove(move)
+        // apply only if now it's not our turn (i.e., opponent moved)
+        if (state.currentTurn !== myColor) {
+          const move = payload.move as unknown as Move
+          if (move) applyMove(move)
+        }
       } catch (e) {
         console.warn('applyMove failed', e)
       }
     }
 
-    const onOppDisconnected = () => {
-      alert('Opponent disconnected. You win!')
-      setMatchState('idle')
-      disconnectSocket()
+    const onGameTimeout = (payload: { loserColor: string; winnerColor: string; loserId: string; winnerId: string; reason?: string }) => {
+      setMatchState('ended')
+      if (user && !gameSaved.current) {
+        gameSaved.current = true
+        const userWon = payload.winnerId === user.id
+        fetch('/api/games/save', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userWon, redUserId: user.id, moves: state.moveHistory, difficulty: null, mode: 'multiplayer' })
+        }).catch(() => {})
+      }
+    }
+
+    const onOppDisconnected = (payload?: { reconnectWindowMs?: number }) => {
+      setOpponentDisconnected(true)
+      const ms = payload?.reconnectWindowMs ?? 60000
+      setDisconnectCountdown(Math.floor(ms / 1000))
+      // start local countdown
+      if (disconnectTimerRef.current) clearInterval(disconnectTimerRef.current)
+      disconnectTimerRef.current = setInterval(() => {
+        setDisconnectCountdown(prev => {
+          if (!prev || prev <= 1) {
+            if (disconnectTimerRef.current) clearInterval(disconnectTimerRef.current)
+            return 0
+          }
+          return prev - 1
+        })
+      }, 1000)
+    }
+
+    const onOppReconnected = () => {
+      setOpponentDisconnected(false)
+      setDisconnectCountdown(null)
+      if (disconnectTimerRef.current) clearInterval(disconnectTimerRef.current)
+    }
+
+    const onGameReconnected = (payload: { roomId: string; color: 'red' | 'black'; currentTurn: 'red' | 'black'; opponent: { id: string; username: string; elo: number } }) => {
+      setRoomId(payload.roomId)
+      setMyColor(payload.color)
+      setOpponentInfo(payload.opponent)
+      setMatchState('playing')
+    }
+
+    const onAlreadyInGame = () => {
+      alert('You already have an active game!')
     }
 
     s.on('match:found', onMatchFound)
     s.on('game:move', onGameMove)
+    s.on('game:timeout', onGameTimeout)
     s.on('opponent:disconnected', onOppDisconnected)
+    s.on('opponent:reconnected', onOppReconnected)
+    s.on('game:reconnected', onGameReconnected)
+    s.on('error:already_in_game', onAlreadyInGame)
 
     return () => {
       s.off('match:found', onMatchFound)
       s.off('game:move', onGameMove)
+      s.off('game:timeout', onGameTimeout)
       s.off('opponent:disconnected', onOppDisconnected)
+      s.off('opponent:reconnected', onOppReconnected)
+      s.off('game:reconnected', onGameReconnected)
+      s.off('error:already_in_game', onAlreadyInGame)
+      if (timerRef.current) clearInterval(timerRef.current)
+      if (disconnectTimerRef.current) clearInterval(disconnectTimerRef.current)
     }
-  }, [applyMove, init])
+  }, [applyMove, init, myColor, state.currentTurn, state.moveHistory, user])
 
   
   const [aiThinking, setAiThinking] = useState(false)
 
   const [difficulty, setDifficulty] = useState<'easy' | 'medium' | 'hard'>('medium')
   const [gameStarted, setGameStarted] = useState(true)
-  const gameSaved = useRef(false)
 
   useEffect(() => {
     init()
@@ -83,6 +162,15 @@ export default function Page() {
 
   const handleSquareClick = (pos: Position) => {
     if (aiThinking || !gameStarted) return
+
+    // Block clicks in multiplayer if not our turn or disconnected
+    const boardDisabled =
+      (gameMode === 'multiplayer' && state.currentTurn !== myColor) ||
+      matchState === 'searching' ||
+      state.status === 'ended' ||
+      opponentDisconnected
+    if (gameMode === 'multiplayer' && boardDisabled) return
+
     const moved = tryMoveTo(pos)
     if (moved) {
       if (gameMode === 'ai') {
@@ -94,7 +182,7 @@ export default function Page() {
         try {
           const s = getSocket()
           const last = state.moveHistory[state.moveHistory.length - 1]
-          if (s && roomId && last) s.emit('game:move', { roomId, move: last, gameState: state })
+          if (s && roomId && last) s.emit('game:move', { roomId, move: last, gameState: state, color: myColor })
         } catch (e) { console.warn('emit game:move failed', e) }
       }
     }
@@ -105,6 +193,29 @@ export default function Page() {
   const recent = state.moveHistory.slice(-10)
   const lastMove = state.moveHistory.length > 0 ? state.moveHistory[state.moveHistory.length - 1] : undefined
 
+  // Turn timer effect (client-side visual)
+  useEffect(() => {
+    if (gameMode !== 'multiplayer' || matchState !== 'playing') return
+    if (state.currentTurn === myColor) {
+      setTurnTimeLeft(60)
+      if (timerRef.current) clearInterval(timerRef.current)
+      timerRef.current = setInterval(() => {
+        setTurnTimeLeft(prev => {
+          if (prev <= 1) {
+            if (timerRef.current) clearInterval(timerRef.current)
+            return 0
+          }
+          return prev - 1
+        })
+      }, 1000)
+    } else {
+      if (timerRef.current) clearInterval(timerRef.current)
+    }
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current)
+    }
+  }, [state.currentTurn, gameMode, matchState, myColor])
+
   useEffect(() => {
     if (state.status === 'ended' && user && !gameSaved.current) {
       gameSaved.current = true
@@ -112,7 +223,7 @@ export default function Page() {
       const duration = startTimeRef.current ? Math.floor((Date.now() - startTimeRef.current) / 1000) : 0
       fetch('/api/games/save', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userWon, redUserId: user.id, blackUserId: gameMode === 'multiplayer' ? opponentInfo?.id : undefined, moves: state.moveHistory, difficulty: difficulty ?? 'medium', mode: gameMode, duration })
+        body: JSON.stringify({ userWon, redUserId: user.id, blackUserId: gameMode === 'multiplayer' ? opponentInfo?.id : undefined, moves: state.moveHistory, difficulty: gameMode === 'multiplayer' ? null : (difficulty ?? 'medium'), mode: gameMode, duration })
       }).then(r => r.json()).then(data => { if (data.eloChange) console.log('ELO changed:', data.eloChange) }).catch(() => {})
     }
   }, [state.status, user, difficulty, gameMode, opponentInfo?.id, state.moveHistory, state.winner])
@@ -131,6 +242,9 @@ export default function Page() {
       <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '10px 16px', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 12 }}>
         <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#374151', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>A</div>
         <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>{gameMode === 'ai' ? 'BEKINGED AI' : opponentInfo?.username ?? 'Waiting...'}</div>
+        {gameMode === 'multiplayer' && opponentInfo && (
+          <div style={{ marginLeft: 8, fontSize: 12, color: 'var(--text-muted)' }}>ELO {opponentInfo.elo}</div>
+        )}
         {gameMode === 'ai' && (
           <div style={{ marginLeft: 8, fontSize: 11, padding: '2px 8px', borderRadius: 4, background: difficulty === 'easy' ? 'rgba(16,185,129,0.1)' : difficulty === 'medium' ? 'rgba(99,102,241,0.1)' : 'rgba(239,68,68,0.1)', color: difficulty === 'easy' ? '#10b981' : difficulty === 'medium' ? '#6366f1' : '#ef4444' }}>
             {difficulty === 'easy' ? 'Easy' : difficulty === 'medium' ? 'Medium' : 'Hard'}
@@ -150,7 +264,11 @@ export default function Page() {
               onPieceClick={handlePieceClick}
               onSquareClick={handleSquareClick}
               lastMove={lastMove ?? undefined}
-              disabled={aiThinking || !gameStarted}
+              disabled={(
+                aiThinking || !gameStarted || (gameMode === 'multiplayer' && (
+                  state.currentTurn !== myColor || matchState === 'searching' || opponentDisconnected || state.status === 'ended'
+                ))
+              )}
             />
 
             {/* End-game modal (overlay) */}
@@ -200,6 +318,24 @@ export default function Page() {
                 </div>
               </div>
             )}
+
+            {/* Match Found modal */}
+            {showMatchFound && (
+              <div style={{ position: 'absolute', inset: 0, background: 'rgba(13,15,20,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 12, zIndex: 25 }}>
+                <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 16, padding: 28, textAlign: 'center', width: 420 }}>
+                  <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 6 }}>Match Found</div>
+                  <div style={{ fontSize: 14, color: 'var(--text-muted)', marginBottom: 12 }}>Opponent</div>
+                  <div style={{ display: 'flex', gap: 12, alignItems: 'center', justifyContent: 'center' }}>
+                    <div style={{ width: 44, height: 44, borderRadius: 10, background: '#374151', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>{(opponentInfo?.username ?? 'O')[0]?.toUpperCase()}</div>
+                    <div style={{ textAlign: 'left' }}>
+                      <div style={{ fontSize: 16, fontWeight: 700 }}>{opponentInfo?.username ?? 'Opponent'}</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>ELO: {opponentInfo?.elo ?? 1000}</div>
+                    </div>
+                  </div>
+                  <div style={{ marginTop: 16, fontSize: 12, color: 'var(--text-muted)' }}>Starting in <span style={{ fontWeight: 800 }}>{matchCountdown}</span></div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -210,6 +346,12 @@ export default function Page() {
             <button onClick={() => { setGameMode('ai'); setMatchState('idle') }} style={{ flex: 1, padding: '8px 10px', borderRadius: 8, background: gameMode === 'ai' ? 'var(--accent)' : 'transparent', color: gameMode === 'ai' ? 'var(--text-primary)' : 'var(--text-muted)', border: '1px solid var(--border)' }}>vs AI</button>
             <button onClick={() => { setGameMode('multiplayer'); }} style={{ flex: 1, padding: '8px 10px', borderRadius: 8, background: gameMode === 'multiplayer' ? 'var(--accent)' : 'transparent', color: gameMode === 'multiplayer' ? 'var(--text-primary)' : 'var(--text-muted)', border: '1px solid var(--border)' }}>Online</button>
           </div>
+
+          {opponentDisconnected && (
+            <div style={{ marginBottom: 12, padding: 10, borderRadius: 8, background: 'rgba(250,204,21,0.08)', border: '1px solid rgba(250,204,21,0.2)', color: '#f59e0b' }}>
+              Opponent disconnected — auto-win in {disconnectCountdown ?? 0}s
+            </div>
+          )}
 
           {/* Difficulty / New Game */}
           {gameMode === 'ai' && (
@@ -226,7 +368,24 @@ export default function Page() {
 
           {gameMode === 'multiplayer' && (
             <div style={{ marginBottom: 12 }}>
-              {matchState !== 'searching' ? (
+              {matchState === 'searching' ? (
+                <button onClick={() => {
+                  const s = getSocket()
+                  s.emit('queue:leave')
+                  disconnectSocket()
+                  setMatchState('idle')
+                }} style={{ width: '100%', padding: 10, background: 'transparent', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text-muted)' }}>Cancel Search</button>
+              ) : matchState === 'playing' ? (
+                <button onClick={() => {
+                  const s = getSocket()
+                  s.emit('queue:leave')
+                  disconnectSocket()
+                  setMatchState('idle')
+                  setRoomId(null)
+                  setOpponentInfo(null)
+                  init()
+                }} style={{ width: '100%', padding: 10, background: 'transparent', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text-muted)' }}>Leave Game</button>
+              ) : (
                 <button onClick={() => {
                     if (!user) return alert('Sign in to use multiplayer')
                     const s = connectSocket()
@@ -238,13 +397,6 @@ export default function Page() {
                     });                  
                     setMatchState('searching')
                 }} style={{ width: '100%', padding: 10, background: 'transparent', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text-primary)' }}>Find Match</button>
-              ) : (
-                <button onClick={() => {
-                  const s = getSocket()
-                  s.emit('queue:leave')
-                  disconnectSocket()
-                  setMatchState('idle')
-                }} style={{ width: '100%', padding: 10, background: 'transparent', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text-muted)' }}>Cancel Search</button>
               )}
             </div>
           )}
@@ -252,11 +404,21 @@ export default function Page() {
           {/* Game Status */}
           {state.status !== 'ended' && (
             <div style={{ marginBottom: 12 }}>
-              {state.currentTurn === 'red' ? (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 15, fontWeight: 600 }}>
-                  <span style={{ width: 10, height: 10, borderRadius: 9999, background: '#ef4444', display: 'inline-block', boxShadow: '0 0 6px rgba(239,68,68,0.6)', animation: 'pulse 1.2s infinite' }} />
-                  <div>Your turn</div>
-                </div>
+              {gameMode === 'multiplayer' ? (
+                state.currentTurn === myColor ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 15, fontWeight: 600 }}>
+                      <span style={{ width: 10, height: 10, borderRadius: 9999, background: '#ef4444', display: 'inline-block', boxShadow: '0 0 6px rgba(239,68,68,0.6)', animation: 'pulse 1.2s infinite' }} />
+                      <div>Your turn</div>
+                    </div>
+                    <div style={{ height: 8, background: '#111827', borderRadius: 8, overflow: 'hidden' }}>
+                      <div style={{ height: '100%', background: '#ef4444', width: `${(turnTimeLeft/60)*100}%`, transition: 'width 250ms linear' }} />
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{turnTimeLeft}s</div>
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 14, color: 'var(--text-muted)' }}>Waiting for opponent...</div>
+                )
               ) : (
                 <div style={{ fontSize: 14, color: 'var(--text-muted)' }}>AI thinking<span style={{ display: 'inline-block', marginLeft: 6 }}>…</span></div>
               )}

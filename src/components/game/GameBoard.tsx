@@ -73,7 +73,7 @@ export default function GameBoard({ state, validMoves, selectedPiece, onPieceCli
               {piece && (
                 <div
                   onClick={(e) => { e.stopPropagation(); if (!disabled) onPieceClick(piece.position) }}
-                  style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                  style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: disabled ? 0.6 : 1 }}
                 >
                   <Piece piece={piece} selected={selectedPiece ? selectedPiece.row === r && selectedPiece.col === c : false} />
                 </div>
@@ -81,6 +81,10 @@ export default function GameBoard({ state, validMoves, selectedPiece, onPieceCli
             </div>
           )
         })}
+
+        {disabled && (
+          <div style={{ position: 'absolute', inset: 0, background: 'transparent', cursor: 'not-allowed', zIndex: 30 }} />
+        )}
       </div>
     </div>
   )
