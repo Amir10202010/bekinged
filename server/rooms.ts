@@ -208,4 +208,7 @@ export function startTurnTimerByRoomId(io: Server, roomId: string) {
   startTurnTimer(io, room)
 }
 
+export function getRoomById(roomId: string): Room | undefined {
+  return rooms.get(roomId)
+}
 export { startTurnTimer }

@@ -10,6 +10,7 @@ import {
   getRoom,
   getRoomByUserId,
   deleteRoom,
+  getRoomById,
 } from './rooms'
 
 // Allow configuration of allowed origins via env var `ALLOWED_ORIGINS` (comma separated)
@@ -89,11 +90,27 @@ io.on('connection', (socket) => {
     }
   )
 
-  socket.on('game:end', (data: { roomId: string }) => {
-    const room = getRoom(socket.id)
+  socket.on('game:end', (data: { roomId?: string; userId?: string }, cb?: (res: { ok: boolean }) => void) => {
+    // Find room by roomId, userId, or socket id
+    let room = undefined
+    if (data?.roomId) {
+      room = getRoomById(data.roomId)
+    }
+    if (!room && data?.userId) {
+      room = getRoomByUserId(data.userId)
+    }
+    if (!room) {
+      room = getRoom(socket.id)
+    }
+
     if (room) {
-      // The player who requested end is considered the loser (forfeit)
-      const leavingColor = room.players.red.socketId === socket.id ? 'red' : 'black'
+      // determine leaving player by matching socket id or provided userId
+      let leavingColor: 'red' | 'black' = room.players.red.socketId === socket.id ? 'red' : 'black'
+      if (data?.userId) {
+        if (room.players.red.userId === data.userId) leavingColor = 'red'
+        else if (room.players.black.userId === data.userId) leavingColor = 'black'
+      }
+
       const winnerColor = leavingColor === 'red' ? 'black' : 'red'
       const loser = room.players[leavingColor]
       const winner = room.players[winnerColor]
@@ -106,9 +123,10 @@ io.on('connection', (socket) => {
         reason: 'forfeit',
       })
 
-      // cleanup
       try { deleteRoom(room.id) } catch (e) { console.warn('deleteRoom failed', e) }
     }
+
+    if (typeof cb === 'function') cb({ ok: true })
   })
 
   socket.on('disconnect', () => {
