@@ -17,9 +17,15 @@ const io = new Server(httpServer, {
 io.on('connection', (socket) => {
   console.log('connected:', socket.id)
 
-  socket.on('queue:join', (data: { userId: string; username: string; elo: number }) => {
-    handleMatchmaking(io, socket, data)
-  })
+    socket.on(
+    'queue:join',
+    (data: { userId: string; username: string; elo: number }) => {
+        handleMatchmaking(io, socket, {
+        ...data,
+        socketId: socket.id,
+        })
+    }
+    )
 
   socket.on('queue:leave', () => {
     removeFromQueue(socket.id)
