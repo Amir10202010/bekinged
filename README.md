@@ -128,7 +128,7 @@ BEKINGED introduces:
 
 ## Frontend
 
-* Next.js 14
+* Next.js
 * TypeScript
 * TailwindCSS
 * Framer Motion

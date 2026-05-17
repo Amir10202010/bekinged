@@ -119,8 +119,13 @@ export default function Page() {
 
   const newGame = () => { gameSaved.current = false; init(); setGameStarted(true); startTimeRef.current = Date.now() }
 
-  const displayName = user ? (((user as Record<string, unknown>)['username'] as string) ?? (user.email ?? '').split('@')[0]) : 'Guest'
-
+    const displayName = user
+    ? (
+        (user.user_metadata?.username as string | undefined) ??
+        user.email?.split('@')[0] ??
+        'Player'
+        )
+    : 'Guest'
   return (
     <div style={{ minHeight: '100vh', padding: 24, background: 'var(--bg-base)' }}>
       {/* Opponent Bar */}
@@ -224,10 +229,15 @@ export default function Page() {
             <div style={{ marginBottom: 12 }}>
               {matchState !== 'searching' ? (
                 <button onClick={() => {
-                  if (!user) return alert('Sign in to use multiplayer')
-                  const s = connectSocket()
-                  s.emit('queue:join', { userId: user.id, username: user.email ?? 'guest', elo: ((user as Record<string, unknown>)['elo'] as number | undefined) ?? 1000 })
-                  setMatchState('searching')
+                    if (!user) return alert('Sign in to use multiplayer')
+                    const s = connectSocket()
+                    const elo = (user.user_metadata as any)?.elo ?? 1000;
+                    s.emit('queue:join', {
+                    userId: user.id,
+                    username: user.email ?? 'guest',
+                    elo,
+                    });                  
+                    setMatchState('searching')
                 }} style={{ width: '100%', padding: 10, background: 'transparent', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text-primary)' }}>Find Match</button>
               ) : (
                 <button onClick={() => {
