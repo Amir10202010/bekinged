@@ -47,9 +47,15 @@ export function handleMove(
   if (!room) return
 
   // Проверяем что ходит правильный игрок
-  const playerColor =
-    room.players.red.socketId === socket.id ? 'red' : 'black'
+  let playerColor: 'red' | 'black' = room.players.red.socketId === socket.id ? 'red' : 'black'
+
+  // If socket id doesn't match, try to trust the provided color (if any) — best-effort for reconnects
+  if (room.players[playerColor].socketId !== socket.id && data.color) {
+    if (data.color === 'red' || data.color === 'black') playerColor = data.color
+  }
+
   if (playerColor !== room.currentTurn) {
+    console.warn('Rejected move: not your turn', { roomId: data.roomId, socketId: socket.id, playerColor, currentTurn: room.currentTurn })
     socket.emit('error:not_your_turn')
     return
   }
@@ -61,11 +67,12 @@ export function handleMove(
   room.currentTurn = room.currentTurn === 'red' ? 'black' : 'red'
   room.moveCount++
 
-  // Отправить ход сопернику
-  socket.to(data.roomId).emit('game:move', {
+  // Отправить ход всем в комнате (включая отправителя) с идентификацией отправителя
+  io.to(data.roomId).emit('game:move', {
     move: data.move,
     gameState: data.gameState,
     currentTurn: room.currentTurn,
+    senderId: room.players[playerColor].userId,
   })
 
   // Запустить таймер на следующий ход (60 секунд)

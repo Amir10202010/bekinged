@@ -9,6 +9,7 @@ import {
   handleReconnect,
   getRoom,
   getRoomByUserId,
+  deleteRoom,
 } from './rooms'
 
 // Allow configuration of allowed origins via env var `ALLOWED_ORIGINS` (comma separated)
@@ -91,7 +92,22 @@ io.on('connection', (socket) => {
   socket.on('game:end', (data: { roomId: string }) => {
     const room = getRoom(socket.id)
     if (room) {
-      io.to(room.id).emit('game:ended_confirmed')
+      // The player who requested end is considered the loser (forfeit)
+      const leavingColor = room.players.red.socketId === socket.id ? 'red' : 'black'
+      const winnerColor = leavingColor === 'red' ? 'black' : 'red'
+      const loser = room.players[leavingColor]
+      const winner = room.players[winnerColor]
+
+      io.to(room.id).emit('game:timeout', {
+        loserColor: leavingColor,
+        winnerColor,
+        loserId: loser.userId,
+        winnerId: winner.userId,
+        reason: 'forfeit',
+      })
+
+      // cleanup
+      try { deleteRoom(room.id) } catch (e) { console.warn('deleteRoom failed', e) }
     }
   })
 
