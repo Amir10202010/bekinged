@@ -5,27 +5,38 @@ import cors from 'cors'
 import { handleMatchmaking, removeFromQueue } from './matchmaking'
 import { handleMove, getRoom, deleteRoom } from './rooms'
 
+const ALLOWED_ORIGINS = [
+  'http://localhost:3000',
+  'https://bekinged-rt5h.vercel.app',
+  process.env.CLIENT_URL,
+].filter(Boolean).map(o => (o as string).replace(/\/$/, ''))
+
+function isAllowed(origin: string | undefined): boolean {
+  if (!origin) return true
+  return ALLOWED_ORIGINS.some(o => origin.replace(/\/$/, '') === o)
+}
+
 const app = express()
-app.use(cors({ origin: process.env.CLIENT_URL || 'http://localhost:3000' }))
+app.use(cors({
+  origin: (origin, cb) => isAllowed(origin) ? cb(null, true) : cb(new Error('CORS')),
+  credentials: true,
+}))
 app.get('/health', (_, res) => res.json({ ok: true }))
 
 const httpServer = createServer(app)
 const io = new Server(httpServer, {
-  cors: { origin: process.env.CLIENT_URL || 'http://localhost:3000' }
+  cors: {
+    origin: (origin, cb) => isAllowed(origin) ? cb(null, true) : cb(new Error('CORS')),
+    credentials: true,
+  }
 })
 
 io.on('connection', (socket) => {
   console.log('connected:', socket.id)
 
-    socket.on(
-    'queue:join',
-    (data: { userId: string; username: string; elo: number }) => {
-        handleMatchmaking(io, socket, {
-        ...data,
-        socketId: socket.id,
-        })
-    }
-    )
+  socket.on('queue:join', (data: { userId: string; username: string; elo: number }) => {
+    handleMatchmaking(io, socket, { ...data, socketId: socket.id })
+  })
 
   socket.on('queue:leave', () => {
     removeFromQueue(socket.id)
