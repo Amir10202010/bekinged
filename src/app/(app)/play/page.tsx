@@ -119,13 +119,12 @@ export default function Page() {
 
   const newGame = () => { gameSaved.current = false; init(); setGameStarted(true); startTimeRef.current = Date.now() }
 
-    const displayName = user
-    ? (
-        (user.user_metadata?.username as string | undefined) ??
+    const displayName =
+    user
+        ? (user.user_metadata?.username ??
         user.email?.split('@')[0] ??
-        'Player'
-        )
-    : 'Guest'
+        'Player')
+        : 'Guest';
   return (
     <div style={{ minHeight: '100vh', padding: 24, background: 'var(--bg-base)' }}>
       {/* Opponent Bar */}
