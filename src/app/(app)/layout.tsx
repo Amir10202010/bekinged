@@ -1,7 +1,7 @@
 "use client"
 import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { useAuth } from '../../hooks/useAuth'
 import ThemeToggle from '../../components/layout/ThemeToggle'
 
@@ -15,8 +15,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     if (!loading && user && pathname === '/') router.replace('/home')
   }, [loading, user, router, pathname])
 
-  const searchParams = useSearchParams()
-  const difficultyParam = searchParams?.get('difficulty')
+  const [difficultyParam, setDifficultyParam] = React.useState<string | null>(null)
+  React.useEffect(() => {
+    try {
+      const sp = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null
+      setDifficultyParam(sp?.get('difficulty') ?? null)
+    } catch {
+      setDifficultyParam(null)
+    }
+  }, [])
 
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
