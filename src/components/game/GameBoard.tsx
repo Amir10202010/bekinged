@@ -1,6 +1,7 @@
 "use client"
 import React from 'react'
 import type { GameState, Position, Move } from '../../lib/game/types'
+// framer-motion not used here
 import Piece from './Piece'
 
 interface Props {
@@ -25,16 +26,16 @@ export default function GameBoard({ state, validMoves, selectedPiece, onPieceCli
 
   return (
     <div
-      style={{ display: 'inline-block', borderRadius: 12, overflow: 'hidden', border: '2px solid #2a3245', boxShadow: '0 25px 60px rgba(0,0,0,0.6)' }}
+      style={{ display: 'inline-block', borderRadius: 12, overflow: 'hidden', border: '2px solid var(--border)', boxShadow: '0 25px 60px rgba(0,0,0,0.6)' }}
     >
       <div
         className="grid"
         style={{
+          position: 'relative',
           gridTemplateColumns: 'repeat(8, 1fr)',
           gridTemplateRows: 'repeat(8, 1fr)',
           width: 'min(480px, calc(100vw - 32px))',
           height: 'min(480px, calc(100vw - 32px))',
-          pointerEvents: disabled ? 'none' : 'auto'
         }}
       >
         {cells.map(({ r, c }) => {
@@ -44,9 +45,9 @@ export default function GameBoard({ state, validMoves, selectedPiece, onPieceCli
           const highlighted = highlights.has(`${r},${c}`)
           const isLast = lastMove && ((lastMove.from.row === r && lastMove.from.col === c) || (lastMove.to.row === r && lastMove.to.col === c))
 
-          const baseBg = isDark ? '#1e2535' : '#0d1117'
-          const hoverBg = isDark ? '#252d3d' : undefined
-          const highlightBg = highlighted ? 'rgba(99,102,241,0.35)' : null
+          const baseBg = isDark ? 'var(--board-dark)' : 'var(--board-light)'
+          const hoverBg = isDark ? 'var(--board-dark)' : undefined
+          const highlightBg = highlighted ? 'var(--board-highlight)' : null
           const lastBg = isLast ? 'rgba(250,204,21,0.15)' : null
 
           const bg = lastBg ?? highlightBg ?? baseBg
@@ -62,11 +63,11 @@ export default function GameBoard({ state, validMoves, selectedPiece, onPieceCli
                 height: '100%',
                 transition: 'background 0.12s',
               }}
-              onMouseEnter={(e) => { if (isDark && !disabled) (e.currentTarget as HTMLElement).style.background = hoverBg as string }}
-              onMouseLeave={(e) => { if (isDark && !disabled) (e.currentTarget as HTMLElement).style.background = lastBg ?? (highlighted ? 'rgba(99,102,241,0.35)' : baseBg) as string }}
+              onMouseEnter={(e) => { if (!disabled && hoverBg) (e.currentTarget as HTMLElement).style.background = hoverBg }}
+              onMouseLeave={(e) => { if (!disabled) (e.currentTarget as HTMLElement).style.background = (lastBg ?? (highlighted ? 'var(--board-highlight)' : baseBg)) as string }}
             >
               {highlighted && !piece && (
-                <div style={{ width: 12, height: 12, borderRadius: 9999, background: 'rgba(99,102,241,0.8)' }} />
+                <div style={{ width: 12, height: 12, borderRadius: 9999, background: 'var(--board-highlight)' }} />
               )}
 
               {piece && (

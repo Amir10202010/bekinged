@@ -1,0 +1,38 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  username  String?
+
+  elo       Int      @default(1000)
+  wins      Int      @default(0)
+  losses    Int      @default(0)
+  streak    Int      @default(0)
+  city      String?
+  updatedAt DateTime @default(now()) @updatedAt
+
+  createdAt DateTime @default(now())
+}
+
+model Game {
+  id          String   @id @default(cuid())
+
+  winnerId    String?
+  blackUserId String?
+  redUserId   String?
+
+  moves       Json
+  mode       String  @default("ai")
+  difficulty String?
+  eloChange  Int?
+  duration   Int?
+
+  createdAt   DateTime @default(now())
+}

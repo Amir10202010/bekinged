@@ -3,8 +3,8 @@
 @tailwind utilities;
 
 body {
-	background: #0d0f14;
-	color: white;
+	background: var(--bg-base);
+	color: var(--text-primary);
 	font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
 }
 
@@ -15,4 +15,36 @@ body {
 
 .pulse {
 	animation: pulse-dot 1.5s ease-in-out infinite;
+}
+
+:root[data-theme="dark"] {
+	--bg-base: #0d0f14;
+	--bg-surface: #161b27;
+	--bg-elevated: #1e2535;
+	--border: #2a3245;
+	--text-primary: #ffffff;
+	--text-muted: #94a3b8;
+	--accent: #6366f1;
+	--success: #10b981;
+	--danger: #ef4444;
+
+	--board-dark: #1e2535;
+	--board-light: #0d1117;
+	--board-highlight: rgba(99,102,241,0.35);
+}
+
+:root[data-theme="light"] {
+	--bg-base: #f8fafc;
+	--bg-surface: #ffffff;
+	--bg-elevated: #f1f5f9;
+	--border: #e2e8f0;
+	--text-primary: #0f172a;
+	--text-muted: #64748b;
+	--accent: #4f46e5;
+	--success: #059669;
+	--danger: #dc2626;
+
+	--board-dark: #b8cce4;
+	--board-light: #f0d9b5;
+	--board-highlight: rgba(99,102,241,0.4);
 }

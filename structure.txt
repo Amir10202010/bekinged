@@ -8,6 +8,15 @@
 ├── package.json
 ├── postcss.config.js
 ├── postcss.config.mjs
+├── prisma
+│   ├── migrations
+│   │   ├── 20260516123850_init
+│   │   │   └── migration.sql
+│   │   ├── 20260517061236_add_game_fields
+│   │   │   └── migration.sql
+│   │   └── migration_lock.toml
+│   └── schema.prisma
+├── prisma.config.ts
 ├── public
 │   ├── file.svg
 │   ├── globe.svg
@@ -15,23 +24,74 @@
 │   ├── vercel.svg
 │   └── window.svg
 ├── README.md
+├── server
+│   ├── index.ts
+│   ├── matchmaking.ts
+│   ├── rooms.ts
+│   └── tsconfig.json
 ├── src
 │   ├── app
+│   │   ├── (app)
+│   │   │   ├── home
+│   │   │   │   └── page.tsx
+│   │   │   ├── layout.tsx
+│   │   │   ├── leaderboard
+│   │   │   │   └── page.tsx
+│   │   │   ├── play
+│   │   │   │   └── page.tsx
+│   │   │   ├── profile
+│   │   │   │   └── page.tsx
+│   │   │   ├── puzzles
+│   │   │   │   └── page.tsx
+│   │   │   └── settings
+│   │   │       └── page.tsx
+│   │   ├── (marketing)
+│   │   │   ├── layout.tsx
+│   │   │   └── page.tsx
+│   │   ├── api
+│   │   │   ├── games
+│   │   │   │   ├── history
+│   │   │   │   │   └── route.ts
+│   │   │   │   └── save
+│   │   │   │       └── route.ts
+│   │   │   ├── leaderboard
+│   │   │   │   └── route.ts
+│   │   │   └── users
+│   │   │       ├── create
+│   │   │       │   └── route.ts
+│   │   │       ├── me
+│   │   │       │   └── route.ts
+│   │   │       └── update
+│   │   │           └── route.ts
 │   │   ├── globals.css
 │   │   ├── layout.tsx
-│   │   ├── page.tsx
-│   │   └── play
+│   │   ├── login
+│   │   │   └── page.tsx
+│   │   └── signup
 │   │       └── page.tsx
 │   ├── components
-│   │   └── game
-│   │       ├── GameBoard.tsx
-│   │       └── Piece.tsx
+│   │   ├── game
+│   │   │   ├── GameBoard.tsx
+│   │   │   └── Piece.tsx
+│   │   ├── layout
+│   │   │   └── ThemeToggle.tsx
+│   │   └── play
+│   │       └── MultiplayerControls.tsx
 │   ├── hooks
-│   │   └── useGame.ts
+│   │   ├── useAuth.ts
+│   │   ├── useGame.ts
+│   │   └── useTheme.ts
 │   ├── lib
-│   │   └── game
-│   │       ├── gameEngine.ts
-│   │       └── types.ts
+│   │   ├── analysis.ts
+│   │   ├── elo.ts
+│   │   ├── game
+│   │   │   ├── gameEngine.ts
+│   │   │   └── types.ts
+│   │   ├── prisma.ts
+│   │   ├── puzzles.ts
+│   │   ├── socket.ts
+│   │   └── supabase
+│   │       └── client.ts
 │   └── store
 │       └── gameStore.ts
 ├── structure.txt
@@ -39,4 +99,4 @@
 ├── tsconfig.json
 └── tsconfig.tsbuildinfo
 
-11 directories, 29 files
+37 directories, 63 files
